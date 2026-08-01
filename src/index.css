@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+.og-serif { font-family: 'Cormorant Garamond', Georgia, serif; }
+.og-sans { font-family: 'Inter', sans-serif; }
+.og-tracked { letter-spacing: 0.22em; }
+.og-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
+.og-scrollbar::-webkit-scrollbar-thumb { background: #C9A227; border-radius: 4px; }
+
+body { margin: 0; }
