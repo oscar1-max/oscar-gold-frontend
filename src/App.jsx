@@ -944,7 +944,8 @@ export default function App() {
 
       {view.name === "home" && <Home setView={setView} addToCart={addToCart} wishlist={wishlist} toggleWishlist={toggleWishlist} query={query} categories={categories} />}
       {view.name === "category" && <CategoryPage id={view.id} setView={setView} addToCart={addToCart} wishlist={wishlist} toggleWishlist={toggleWishlist} categories={categories} />}
-      {view.name === "product" && <ProductDetail id={view.id} setView={setView} add {view.name === "cart" && <CartPage setView={setView} user={user} refreshCartCount={refreshCartCount} />}
+      {view.name === "product" && <ProductDetail id={view.id} setView={setView} addToCart={addToCart} wishlist={wishlist} toggleWishlist={toggleWishlist} user={user} />}
+{view.name === "cart" && <CartPage setView={setView} user={user} refreshCartCount={refreshCartCount} />}
       {view.name === "checkout" && <CheckoutPage setView={setView} refreshCartCount={refreshCartCount} />}
       {view.name === "login" && <LoginPage setView={setView} onLogin={onLogin} />}
       {view.name === "register" && <RegisterPage setView={setView} onLogin={onLogin} />}
