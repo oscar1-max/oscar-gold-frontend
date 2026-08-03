@@ -665,3 +665,211 @@ function WishlistPage({ setView, addToCart, toggleWishlist, wishlist }) {
     </div>
   );
         }
+function SellerDashboard() {
+  const [tab, setTab] = useState("overview");
+  const [me, setMe] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [error, setError] = useState(null);
+  const [newProduct, setNewProduct] = useState({ categoryId: "", name: "", brand: "", description: "", priceDollars: "", stock: "" });
+  const [creating, setCreating] = useState(false);
+
+  const reload = useCallback(() => {
+    api.sellerMe().then(setMe).catch((e) => setError(e.message));
+    api.categories().then(setCategories);
+  }, []);
+  useEffect(reload, [reload]);
+  useEffect(() => { if (tab === "products" && me?.status === "approved") api.sellerProducts().then(setProducts); }, [tab, me]);
+  useEffect(() => { if (tab === "orders" && me?.status === "approved") api.sellerOrders().then(setOrders); }, [tab, me]);
+
+  if (error) return <div className="max-w-6xl mx-auto px-4 py-10"><ErrorBox message={error} /></div>;
+  if (!me) return <Loading />;
+
+  const createProduct = async () => {
+    setCreating(true);
+    try {
+      await api.createSellerProduct({
+        categoryId: newProduct.categoryId,
+        name: newProduct.name,
+        brand: newProduct.brand,
+        description: newProduct.description,
+        priceCents: Math.round(Number(newProduct.priceDollars) * 100),
+        variants: [{ stock: Number(newProduct.stock) || 0 }],
+      });
+      setNewProduct({ categoryId: "", name: "", brand: "", description: "", priceDollars: "", stock: "" });
+      setTab("products");
+      api.sellerProducts().then(setProducts);
+    } catch (e) { alert(e.message); }
+    setCreating(false);
+  };
+
+  const stats = [
+    { label: "Revenue (30d)", value: cents(me.stats.revenueCents), icon: TrendingUp },
+    { label: "Orders (30d)", value: me.stats.orders30d, icon: Package },
+    { label: "Rating", value: me.stats.avgRating ? `${me.stats.avgRating} ★` : "—", icon: Star },
+    { label: "Active Listings", value: me.stats.activeListings, icon: Store },
+  ];
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-10">
+      <div className="flex items-center gap-3 mb-2"><Store size={20} color={C.gold} /><h1 className="og-serif" style={{ fontSize: 28, fontWeight: 700, color: C.black }}>Seller Dashboard</h1></div>
+      <p className="og-sans text-sm mb-6" style={{ color: C.textMuted }}>{me.store_name} · <span className="capitalize" style={{ color: me.status === "approved" ? "#3B7A3B" : C.gold }}>{me.status}</span></p>
+
+      {me.status !== "approved" && <ErrorBox message={`Your seller account is ${me.status}. Listings are disabled until an admin approves you — log in as admin to approve it.`} />}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 mt-4">
+        {stats.map((s) => (
+          <div key={s.label} className="p-4" style={{ background: C.black }}>
+            <s.icon size={16} color={C.gold} />
+            <div className="og-serif mt-2" style={{ fontSize: 22, fontWeight: 700, color: C.white }}>{s.value}</div>
+            <div className="og-sans text-[11px]" style={{ color: "#B9B4A6" }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-6 og-sans text-xs mb-5" style={{ borderBottom: `1px solid ${C.line}` }}>
+        {["overview", "products", "orders", "add product"].map((t) => (
+          <button key={t} onClick={() => setTab(t)} className="pb-3 capitalize" style={{ color: tab === t ? C.gold : C.textMuted, borderBottom: tab === t ? `2px solid ${C.gold}` : "none" }}>{t}</button>
+        ))}
+      </div>
+
+      {tab === "overview" && <div className="og-sans text-sm p-5" style={{ border: `1px solid ${C.line}`, color: C.textMuted }}>Welcome back, {me.store_name}.</div>}
+
+      {tab === "products" && (
+        <table className="w-full og-sans text-sm text-left">
+          <thead><tr style={{ color: C.textMuted, borderBottom: `1px solid ${C.line}` }}><th className="py-2">Product</th><th>Price</th><th>Stock</th><th>Status</th></tr></thead>
+          <tbody>
+            {products.map((p) => (
+              <tr key={p.id} style={{ borderBottom: `1px solid ${C.line}`, color: C.black }}>
+                <td className="py-3">{p.name}</td><td>{cents(p.price_cents)}</td>
+                <td>{p.variants.reduce((s, v) => s + v.stock, 0)}</td>
+                <td><span className="px-2 py-0.5 text-[10px] capitalize" style={{ background: "#EAF4EA", color: "#3B7A3B" }}>{p.status}</span></td>
+              </tr>
+            ))}
+            {products.length === 0 && <tr><td colSpan={4} className="py-6 text-center" style={{ color: C.textMuted }}>No products yet.</td></tr>}
+          </tbody>
+        </table>
+      )}
+
+      {tab === "orders" && (
+        <div className="space-y-3">
+          {orders.map((o) => (
+            <div key={o.id} className="flex items-center justify-between p-4" style={{ border: `1px solid ${C.line}` }}>
+              <span className="og-sans text-sm" style={{ color: C.black }}>#{o.id.slice(0, 8)}</span>
+              <span className="og-sans text-xs" style={{ color: C.textMuted }}>{new Date(o.created_at).toLocaleDateString()}</span>
+              <select defaultValue={o.status} onChange={(e) => api.updateSellerOrderStatus(o.id, e.target.value)} className="og-sans text-xs px-2 py-1" style={{ border: `1px solid ${C.line}` }}>
+                <option value="processing">Processing</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option>
+              </select>
+            </div>
+          ))}
+          {orders.length === 0 && <div className="og-sans text-sm text-center py-6" style={{ color: C.textMuted }}>No orders yet.</div>}
+        </div>
+      )}
+
+      {tab === "add product" && (
+        <div className="grid md:grid-cols-2 gap-3 max-w-2xl">
+          <input className="og-sans text-sm px-3 py-2.5" placeholder="Product name" value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} style={{ border: `1px solid ${C.line}` }} />
+          <select className="og-sans text-sm px-3 py-2.5" value={newProduct.categoryId} onChange={(e) => setNewProduct({ ...newProduct, categoryId: e.target.value })} style={{ border: `1px solid ${C.line}` }}>
+            <option value="">Select category</option>
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <input className="og-sans text-sm px-3 py-2.5" placeholder="Brand" value={newProduct.brand} onChange={(e) => setNewProduct({ ...newProduct, brand: e.target.value })} style={{ border: `1px solid ${C.line}` }} />
+          <input className="og-sans text-sm px-3 py-2.5" placeholder="Price ($)" value={newProduct.priceDollars} onChange={(e) => setNewProduct({ ...newProduct, priceDollars: e.target.value })} style={{ border: `1px solid ${C.line}` }} />
+          <input className="og-sans text-sm px-3 py-2.5" placeholder="Stock quantity" value={newProduct.stock} onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })} style={{ border: `1px solid ${C.line}` }} />
+          <textarea className="og-sans text-sm px-3 py-2.5 col-span-2" placeholder="Description" rows={3} value={newProduct.description} onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })} style={{ border: `1px solid ${C.line}` }} />
+          <div className="col-span-2"><GoldButton icon={Plus} onClick={createProduct} disabled={creating || me.status !== "approved"}>{creating ? "Listing..." : "List Product"}</GoldButton></div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminDashboard() {
+  const [tab, setTab] = useState("overview");
+  const [stats, setStats] = useState(null);
+  const [sellers, setSellers] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+
+  useEffect(() => { api.adminStats().then(setStats); }, []);
+  useEffect(() => { if (tab === "sellers") api.adminSellers().then(setSellers); }, [tab]);
+  useEffect(() => { if (tab === "users") api.adminUsers().then(setUsers); }, [tab]);
+  useEffect(() => { if (tab === "transactions") api.adminTransactions().then(setTransactions); }, [tab]);
+
+  const setSellerStatus = async (id, status) => { await api.updateSellerStatus(id, status); api.adminSellers().then(setSellers); };
+
+  if (!stats) return <Loading />;
+
+  const statCards = [
+    { label: "GMV (30d)", value: cents(stats.gmvCents30d), icon: TrendingUp },
+    { label: "Active Users", value: stats.activeUsers, icon: Users },
+    { label: "Approved Sellers", value: stats.approvedSellers, icon: Store },
+    { label: "Pending Approvals", value: stats.pendingSellerApprovals, icon: AlertTriangle },
+  ];
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-10">
+      <div className="flex items-center gap-3 mb-6"><Settings size={20} color={C.gold} /><h1 className="og-serif" style={{ fontSize: 28, fontWeight: 700, color: C.black }}>Admin Dashboard</h1></div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {statCards.map((s) => (
+          <div key={s.label} className="p-4" style={{ border: `1px solid ${C.line}` }}>
+            <s.icon size={16} color={C.gold} />
+            <div className="og-serif mt-2" style={{ fontSize: 22, fontWeight: 700, color: C.black }}>{s.value}</div>
+            <div className="og-sans text-[11px]" style={{ color: C.textMuted }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-6 og-sans text-xs mb-5" style={{ borderBottom: `1px solid ${C.line}` }}>
+        {["overview", "sellers", "users", "transactions"].map((t) => (
+          <button key={t} onClick={() => setTab(t)} className="pb-3 capitalize" style={{ color: tab === t ? C.gold : C.textMuted, borderBottom: tab === t ? `2px solid ${C.gold}` : "none" }}>{t}</button>
+        ))}
+      </div>
+
+      {tab === "overview" && <div className="og-sans text-sm p-5" style={{ background: C.black, color: "#B9B4A6" }}>{stats.pendingSellerApprovals} seller application(s) await approval. {stats.flaggedProducts} listing(s) flagged for review.</div>}
+
+      {tab === "sellers" && (
+        <div className="space-y-3">
+          {sellers.map((s) => (
+            <div key={s.id} className="flex items-center justify-between p-4" style={{ border: `1px solid ${C.line}` }}>
+              <div><div className="og-sans text-sm font-semibold" style={{ color: C.black }}>{s.store_name}</div><div className="og-sans text-xs" style={{ color: C.textMuted }}>{s.email} · <span className="capitalize">{s.status}</span></div></div>
+              <div className="flex gap-2">
+                {s.status !== "approved" && <GoldButton small onClick={() => setSellerStatus(s.id, "approved")}>Approve</GoldButton>}
+                {s.status !== "suspended" && <GoldButton small outline onClick={() => setSellerStatus(s.id, "suspended")}>Suspend</GoldButton>}
+              </div>
+            </div>
+          ))}
+          {sellers.length === 0 && <div className="og-sans text-sm text-center py-6" style={{ color: C.textMuted }}>No sellers yet.</div>}
+        </div>
+      )}
+
+      {tab === "users" && (
+        <table className="w-full og-sans text-sm text-left">
+          <thead><tr style={{ color: C.textMuted, borderBottom: `1px solid ${C.line}` }}><th className="py-2">User</th><th>Role</th><th>Joined</th></tr></thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.id} style={{ borderBottom: `1px solid ${C.line}`, color: C.black }}>
+                <td className="py-3">{u.name} <span style={{ color: C.textMuted }}>({u.email})</span></td>
+                <td className="capitalize">{u.role}</td>
+                <td>{new Date(u.created_at).toLocaleDateString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {tab === "transactions" && (
+        <table className="w-full og-sans text-sm text-left">
+          <thead><tr style={{ color: C.textMuted, borderBottom: `1px solid ${C.line}` }}><th className="py-2">Order</th><th>Buyer</th><th>Amount</th><th>Method</th><th>Status</th></tr></thead>
+          <tbody>
+            {transactions.map((t) => (
+              <tr key={t.id} style={{ borderBottom: `1px solid ${C.line}`, color: C.black }}>
+                <td className="py-3">#{t.order_id.slice(0, 8)}</td><td>{t.buyer_name}</td><td>{cents(t.amount_cents)}</td><td className="capitalize">{t.method}</td><td className="capitalize">{t.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+    }
