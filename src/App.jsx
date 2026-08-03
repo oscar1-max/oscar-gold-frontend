@@ -282,4 +282,108 @@ function CategoryPage({ id, setView, addToCart, wishlist, toggleWishlist, catego
       </div>
     </div>
   );
+  function ProductDetail({ id, setView, addToCart, wishlist, toggleWishlist, user }) {
+  const [product, setProduct] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [color, setColor] = useState(null);
+  const [size, setSize] = useState(null);
+  const [qty, setQty] = useState(1);
+  const [reviewText, setReviewText] = useState("");
+  const [reviewRating, setReviewRating] = useState(5);
+  const [submittingReview, setSubmittingReview] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([api.product(id), api.reviews(id)])
+      .then(([p, r]) => { setProduct(p); setReviews(r); setColor(p.variants.find((v) => v.color)?.color || null); setSize(p.variants.find((v) => v.size)?.size || null); })
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading) return <Loading />;
+  if (error || !product) return <ErrorBox message={error || "Product not found"} />;
+
+  const colors = [...new Set(product.variants.map((v) => v.color).filter(Boolean))];
+  const sizes = [...new Set(product.variants.map((v) => v.size).filter(Boolean))];
+  const variant = product.variants.find((v) => (!colors.length || v.color === color) && (!sizes.length || v.size === size)) || product.variants[0];
+
+  const submitReview = async () => {
+    if (!user) return setView({ name: "login" });
+    setSubmittingReview(true);
+    try {
+      await api.addReview(id, { rating: reviewRating, text: reviewText });
+      setReviews(await api.reviews(id));
+      setReviewText("");
+    } catch (e) { alert(e.message); }
+    setSubmittingReview(false);
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="flex items-center gap-1 og-sans text-xs mb-6" style={{ color: C.textMuted }}>
+        <button onClick={() => setView({ name: "home" })}>Home</button><ChevronRight size={12} /> <span style={{ color: C.black }}>{product.name}</span>
+      </div>
+      <div className="grid md:grid-cols-2 gap-10">
+        <ProductImage product={product} className="w-full h-80 md:h-96" iconSize={70} />
+        <div>
+          <div className="og-sans text-xs og-tracked" style={{ color: C.gold }}>{product.brand}</div>
+          <h1 className="og-serif" style={{ fontSize: 32, fontWeight: 700, color: C.black }}>{product.name}</h1>
+          <div className="flex items-center gap-2 mt-2">
+            <Stars rating={product.rating} />
+            <span className="og-sans text-xs" style={{ color: C.textMuted }}>{product.rating ? `${product.rating} · ${product.reviewCount} reviews` : "No reviews yet"}</span>
+          </div>
+          <div className="mt-4"><span className="og-serif font-bold" style={{ fontSize: 30, color: C.black }}>{cents(product.price_cents)}</span></div>
+          <p className="og-sans text-sm mt-4 leading-relaxed" style={{ color: C.textMuted }}>{product.description}</p>
+
+          {colors.length > 0 && <div className="mt-6"><div className="og-sans text-xs font-semibold mb-2" style={{ color: C.black }}>COLOUR</div><div className="flex gap-2">{colors.map((c) => <Pill key={c} active={color === c} onClick={() => setColor(c)}>{c}</Pill>)}</div></div>}
+          {sizes.length > 0 && <div className="mt-4"><div className="og-sans text-xs font-semibold mb-2" style={{ color: C.black }}>SIZE</div><div className="flex gap-2 flex-wrap">{sizes.map((s) => <Pill key={s} active={size === s} onClick={() => setSize(s)}>{s}</Pill>)}</div></div>}
+
+          <div className="og-sans text-xs mt-4 flex items-center gap-1.5" style={{ color: variant?.stock > 10 ? "#3B7A3B" : C.gold }}>
+            <Check size={13} /> {variant?.stock > 0 ? `${variant.stock} in stock` : "Out of stock"} — sold by {product.seller_name}
+          </div>
+
+          <div className="flex items-center gap-4 mt-6">
+            <div className="flex items-center" style={{ border: `1px solid ${C.line}` }}>
+              <button onClick={() => setQty(Math.max(1, qty - 1))} className="p-3"><Minus size={14} /></button>
+              <span className="og-sans w-8 text-center text-sm">{qty}</span>
+              <button onClick={() => setQty(qty + 1)} className="p-3"><Plus size={14} /></button>
+            </div>
+            <GoldButton icon={ShoppingCart} onClick={() => addToCart(product, variant, qty)} disabled={!variant || variant.stock === 0}>Add to Cart</GoldButton>
+            <button onClick={() => toggleWishlist(product.id)} className="p-3" style={{ border: `1px solid ${C.line}` }}>
+              <Heart size={18} fill={wishlist.includes(product.id) ? C.gold : "none"} color={C.gold} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 mt-8 pt-6" style={{ borderTop: `1px solid ${C.line}` }}>
+            <div className="og-sans text-[11px] flex flex-col items-center text-center gap-1.5" style={{ color: C.textMuted }}><Truck size={18} color={C.gold} /> Fast delivery</div>
+            <div className="og-sans text-[11px] flex flex-col items-center text-center gap-1.5" style={{ color: C.textMuted }}><ShieldCheck size={18} color={C.gold} /> Buyer protection</div>
+            <div className="og-sans text-[11px] flex flex-col items-center text-center gap-1.5" style={{ color: C.textMuted }}><MessageCircle size={18} color={C.gold} /> Message seller</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-16 max-w-2xl">
+        <SectionTitle title="Customer Reviews" />
+        <div className="flex gap-2 items-center mb-6">
+          <select value={reviewRating} onChange={(e) => setReviewRating(+e.target.value)} className="og-sans text-xs px-2 py-2" style={{ border: `1px solid ${C.line}` }}>
+            {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{r} stars</option>)}
+          </select>
+          <input value={reviewText} onChange={(e) => setReviewText(e.target.value)} placeholder={user ? "Write a review..." : "Log in to write a review"} className="og-sans text-sm flex-1 px-3 py-2" style={{ border: `1px solid ${C.line}` }} />
+          <GoldButton small onClick={submitReview} disabled={submittingReview}>Post</GoldButton>
+        </div>
+        <div className="space-y-5">
+          {reviews.map((r) => (
+            <div key={r.id} className="pb-5" style={{ borderBottom: `1px solid ${C.line}` }}>
+              <div className="flex items-center justify-between"><span className="og-sans text-sm font-semibold" style={{ color: C.black }}>{r.buyer_name}</span><Stars rating={r.rating} size={12} /></div>
+              {r.text && <p className="og-sans text-sm mt-1" style={{ color: C.textMuted }}>{r.text}</p>}
+            </div>
+          ))}
+          {reviews.length === 0 && <div className="og-sans text-sm" style={{ color: C.textMuted }}>No reviews yet — be the first.</div>}
+        </div>
+      </div>
+    </div>
+  );
+    }
                                                                   }
