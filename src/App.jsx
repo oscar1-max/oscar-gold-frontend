@@ -873,3 +873,93 @@ function AdminDashboard() {
     </div>
   );
     }
+function Footer() {
+  return (
+    <div style={{ background: C.black }}>
+      <div className="og-sans text-[11px] text-center py-6" style={{ color: "#5A5648" }}>© 2026 Oscar Gold Store — connected to your live API.</div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [view, setView] = useState({ name: "home" });
+  const [user, setUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [query, setQuery] = useState("");
+  const [cartCount, setCartCount] = useState(0);
+  const [wishlist, setWishlist] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => { api.categories().then(setCategories).catch(() => {}); }, []);
+
+  useEffect(() => {
+    api.me().then((u) => setUser(u)).catch(() => setToken(null)).finally(() => setAuthChecked(true));
+  }, []);
+
+  const refreshCartCount = useCallback(() => {
+    if (!user) return setCartCount(0);
+    api.getCart().then((c) => setCartCount(c.items.reduce((s, i) => s + i.quantity, 0))).catch(() => {});
+  }, [user]);
+  useEffect(refreshCartCount, [refreshCartCount]);
+
+  useEffect(() => {
+    if (!user) return setWishlist([]);
+    api.getWishlist().then((items) => setWishlist(items.map((i) => i.id))).catch(() => {});
+  }, [user, view]);
+
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 1800); };
+
+  const onLogin = ({ token, user }) => {
+    setToken(token);
+    setUser(user);
+    setView({ name: user.role === "seller" ? "seller" : user.role === "admin" ? "admin" : "home" });
+  };
+  const logout = () => { setToken(null); setUser(null); setView({ name: "home" }); };
+
+  const addToCart = async (product, variant, qty = 1) => {
+    if (!user) { showToast("Log in to add items to your cart"); return setView({ name: "login" }); }
+    const v = variant || product.variants?.[0];
+    if (!v) return showToast("No available option for this product");
+    try {
+      await api.addToCart(v.id, qty);
+      showToast(`${product.name} added to cart`);
+      refreshCartCount();
+    } catch (e) { showToast(e.message); }
+  };
+
+  const toggleWishlist = async (productId) => {
+    if (!user) { showToast("Log in to save items"); return setView({ name: "login" }); }
+    try {
+      if (wishlist.includes(productId)) { await api.removeWishlist(productId); setWishlist((w) => w.filter((x) => x !== productId)); }
+      else { await api.addWishlist(productId); setWishlist((w) => [...w, productId]); }
+    } catch (e) { showToast(e.message); }
+  };
+
+  if (!authChecked) return <Loading label="Connecting to Oscar Gold Store API..." />;
+
+  return (
+    <div className="min-h-screen og-sans" style={{ background: C.white }}>
+      <TopBar setView={setView} cartCount={cartCount} user={user} logout={logout} query={query} setQuery={setQuery} categories={categories} />
+
+      {view.name === "home" && <Home setView={setView} addToCart={addToCart} wishlist={wishlist} toggleWishlist={toggleWishlist} query={query} categories={categories} />}
+      {view.name === "category" && <CategoryPage id={view.id} setView={setView} addToCart={addToCart} wishlist={wishlist} toggleWishlist={toggleWishlist} categories={categories} />}
+      {view.name === "product" && <ProductDetail id={view.id} setView={setView} add {view.name === "cart" && <CartPage setView={setView} user={user} refreshCartCount={refreshCartCount} />}
+      {view.name === "checkout" && <CheckoutPage setView={setView} refreshCartCount={refreshCartCount} />}
+      {view.name === "login" && <LoginPage setView={setView} onLogin={onLogin} />}
+      {view.name === "register" && <RegisterPage setView={setView} onLogin={onLogin} />}
+      {view.name === "account" && user && <AccountPage user={user} />}
+      {view.name === "wishlist" && <WishlistPage setView={setView} addToCart={addToCart} toggleWishlist={toggleWishlist} wishlist={wishlist} />}
+      {view.name === "seller" && (user?.role === "seller" ? <SellerDashboard /> : <div className="max-w-6xl mx-auto px-4 py-16"><ErrorBox message="Log in as a seller to view this page." /></div>)}
+      {view.name === "admin" && (user?.role === "admin" ? <AdminDashboard /> : <div className="max-w-6xl mx-auto px-4 py-16"><ErrorBox message="Log in as an admin to view this page." /></div>)}
+
+      <Footer />
+
+      {toast && (
+        <div className="og-sans fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 text-xs font-semibold flex items-center gap-2 z-50" style={{ background: C.black, color: C.goldLight, border: `1px solid ${C.gold}` }}>
+          <Check size={14} color={C.gold} /> {toast}
+        </div>
+      )}
+    </div>
+  );
+        }
