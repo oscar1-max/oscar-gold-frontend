@@ -386,4 +386,164 @@ function CategoryPage({ id, setView, addToCart, wishlist, toggleWishlist, catego
     </div>
   );
     }
-                                                                  }
+function CartPage({ setView, user, refreshCartCount }) {
+  const [cart, setCart] = useState({ items: [], savedForLater: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    api.getCart().then(setCart).catch((e) => setError(e.message)).finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { if (user) load(); }, [user, load]);
+
+  if (!user) return <div className="max-w-6xl mx-auto px-4 py-16 text-center og-sans text-sm" style={{ color: C.textMuted }}>Log in to view your cart. <button onClick={() => setView({ name: "login" })} className="underline" style={{ color: C.gold }}>Log in</button></div>;
+  if (loading) return <Loading />;
+  if (error) return <ErrorBox message={error} />;
+
+  const updateQty = async (itemId, quantity) => { await api.updateCartItem(itemId, { quantity }); load(); refreshCartCount(); };
+  const removeItem = async (itemId) => { await api.removeCartItem(itemId); load(); refreshCartCount(); };
+  const saveForLater = async (itemId) => { await api.updateCartItem(itemId, { savedForLater: true }); load(); refreshCartCount(); };
+  const moveToCart = async (itemId) => { await api.updateCartItem(itemId, { savedForLater: false }); load(); refreshCartCount(); };
+
+  const subtotal = cart.items.reduce((s, i) => s + i.price_cents * i.quantity, 0);
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-10">
+      <SectionTitle title="Your Cart" />
+      {cart.items.length === 0 ? (
+        <div className="og-sans text-sm py-16 text-center" style={{ color: C.textMuted }}>Your cart is empty. <button onClick={() => setView({ name: "home" })} className="underline" style={{ color: C.gold }}>Continue shopping</button></div>
+      ) : (
+        <div className="grid md:grid-cols-3 gap-10">
+          <div className="md:col-span-2 space-y-4">
+            {cart.items.map((item) => (
+              <div key={item.id} className="flex gap-4 p-3" style={{ border: `1px solid ${C.line}` }}>
+                <ProductImage product={item} className="w-24 h-24 shrink-0" iconSize={22} />
+                <div className="flex-1">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="og-serif font-semibold" style={{ color: C.black, fontSize: 16 }}>{item.name}</div>
+                      <div className="og-sans text-xs mt-0.5" style={{ color: C.textMuted }}>{item.color && `Colour: ${item.color}`} {item.size && ` · Size: ${item.size}`}</div>
+                    </div>
+                    <button onClick={() => removeItem(item.id)}><Trash2 size={15} color={C.textMuted} /></button>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <div className="flex items-center" style={{ border: `1px solid ${C.line}` }}>
+                      <button onClick={() => updateQty(item.id, Math.max(1, item.quantity - 1))} className="p-1.5"><Minus size={12} /></button>
+                      <span className="og-sans w-7 text-center text-xs">{item.quantity}</span>
+                      <button onClick={() => updateQty(item.id, item.quantity + 1)} className="p-1.5"><Plus size={12} /></button>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => saveForLater(item.id)} className="og-sans text-[11px] underline" style={{ color: C.textMuted }}>Save for later</button>
+                      <span className="og-serif font-bold" style={{ color: C.black }}>{cents(item.price_cents * item.quantity)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {cart.savedForLater.length > 0 && (
+              <div className="pt-6">
+                <div className="og-sans text-xs font-semibold mb-3" style={{ color: C.black }}>SAVED FOR LATER</div>
+                {cart.savedForLater.map((item) => (
+                  <div key={item.id} className="flex items-center gap-4 p-3 mb-2" style={{ border: `1px solid ${C.line}` }}>
+                    <ProductImage product={item} className="w-14 h-14 shrink-0" iconSize={14} />
+                    <div className="flex-1 og-sans text-sm" style={{ color: C.black }}>{item.name}</div>
+                    <button onClick={() => moveToCart(item.id)} className="og-sans text-[11px] underline" style={{ color: C.gold }}>Move to cart</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="h-fit p-5" style={{ background: C.off, border: `1px solid ${C.line}` }}>
+            <div className="og-sans text-sm flex justify-between mb-2" style={{ color: C.textMuted }}><span>Subtotal</span><span>{cents(subtotal)}</span></div>
+            <div className="og-serif flex justify-between mt-4 pt-4 font-bold" style={{ borderTop: `1px solid ${C.line}`, color: C.black, fontSize: 20 }}><span>Total (before shipping)</span><span>{cents(subtotal)}</span></div>
+            <GoldButton full onClick={() => setView({ name: "checkout" })} disabled={cart.items.length === 0}>Proceed to Checkout</GoldButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CheckoutPage({ setView, refreshCartCount }) {
+  const [form, setForm] = useState({ full_name: "", phone: "", line1: "", city: "", postal_code: "", country: "US" });
+  const [shippingMethod, setShippingMethod] = useState("Standard");
+  const [shippingCents, setShippingCents] = useState(699);
+  const [paymentMethod, setPaymentMethod] = useState("card");
+  const [placing, setPlacing] = useState(false);
+  const [error, setError] = useState(null);
+  const [result, setResult] = useState(null);
+
+  const placeOrder = async () => {
+    setPlacing(true);
+    setError(null);
+    try {
+      const res = await api.checkout({ address: form, shippingMethod, shippingCents, paymentMethod });
+      if (paymentMethod === "card") {
+        try {
+          const intent = await api.createPaymentIntent(res.paymentId);
+          setResult({ ...res, clientSecret: intent.clientSecret });
+        } catch (e) {
+          setResult({ ...res, stripeError: e.message });
+        }
+      } else {
+        setResult(res);
+      }
+      refreshCartCount();
+    } catch (e) { setError(e.message); }
+    setPlacing(false);
+  };
+
+  if (result) {
+    return (
+      <div className="max-w-lg mx-auto px-4 py-24 text-center">
+        <div className="mx-auto mb-5 flex items-center justify-center rounded-full" style={{ width: 60, height: 60, background: C.black }}><Check color={C.gold} size={26} /></div>
+        <h2 className="og-serif" style={{ fontSize: 28, fontWeight: 700, color: C.black }}>Order Created</h2>
+        <p className="og-sans text-sm mt-2" style={{ color: C.textMuted }}>Order #{result.order.id.slice(0, 8)} — status: {result.order.status}.</p>
+        {paymentMethod === "card" && result.clientSecret && (
+          <p className="og-sans text-xs mt-3" style={{ color: C.textMuted }}>A Stripe payment intent was created. To actually capture the card, add Stripe Elements to this page and confirm the intent client-side — see the backend README.</p>
+        )}
+        {result.stripeError && <ErrorBox message={`Order was created, but the payment intent failed: ${result.stripeError}. Check STRIPE_SECRET_KEY in the backend .env.`} />}
+        {paymentMethod !== "card" && <p className="og-sans text-xs mt-3" style={{ color: C.textMuted }}>Payment is pending admin confirmation (bank/mobile payments are verified manually).</p>}
+        <GoldButton style={{ marginTop: 24 }} onClick={() => setView({ name: "home" })}>Continue Shopping</GoldButton>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-10">
+      <SectionTitle title="Checkout" />
+      {error && <div className="mb-4"><ErrorBox message={error} /></div>}
+      <div className="grid md:grid-cols-2 gap-8">
+        <div className="space-y-3">
+          <div className="og-sans text-xs font-semibold" style={{ color: C.black }}>DELIVERY ADDRESS</div>
+          <input className="og-sans text-sm px-3 py-2.5 w-full" placeholder="Full name" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} style={{ border: `1px solid ${C.line}` }} />
+          <input className="og-sans text-sm px-3 py-2.5 w-full" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} style={{ border: `1px solid ${C.line}` }} />
+          <input className="og-sans text-sm px-3 py-2.5 w-full" placeholder="Address" value={form.line1} onChange={(e) => setForm({ ...form, line1: e.target.value })} style={{ border: `1px solid ${C.line}` }} />
+          <div className="grid grid-cols-2 gap-3">
+            <input className="og-sans text-sm px-3 py-2.5" placeholder="City" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} style={{ border: `1px solid ${C.line}` }} />
+            <input className="og-sans text-sm px-3 py-2.5" placeholder="ZIP" value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value })} style={{ border: `1px solid ${C.line}` }} />
+          </div>
+
+          <div className="og-sans text-xs font-semibold pt-4" style={{ color: C.black }}>SHIPPING</div>
+          {[["Standard (3–5 days)", 699], ["Express (1–2 days)", 1499]].map(([label, price]) => (
+            <label key={label} className="flex items-center justify-between p-3 cursor-pointer" style={{ border: `1px solid ${C.line}` }}>
+              <span className="flex items-center gap-2 og-sans text-sm" style={{ color: C.black }}><input type="radio" checked={shippingMethod === label} onChange={() => { setShippingMethod(label); setShippingCents(price); }} style={{ accentColor: C.gold }} />{label}</span>
+              <span className="og-sans text-sm" style={{ color: C.textMuted }}>{cents(price)}</span>
+            </label>
+          ))}
+
+          <div className="og-sans text-xs font-semibold pt-4" style={{ color: C.black }}>PAYMENT</div>
+          {[["card", "Credit / Debit Card", CreditCard], ["bank", "Bank Transfer", Building2], ["mobile", "Mobile Payment", Smartphone]].map(([id, label, Icon]) => (
+            <label key={id} className="flex items-center gap-3 p-3 cursor-pointer" style={{ border: `1px solid ${paymentMethod === id ? C.gold : C.line}` }} onClick={() => setPaymentMethod(id)}>
+              <input type="radio" checked={paymentMethod === id} readOnly style={{ accentColor: C.gold }} /><Icon size={16} color={C.gold} /><span className="og-sans text-sm" style={{ color: C.black }}>{label}</span>
+            </label>
+          ))}
+          <div className="og-sans text-[11px] flex items-center gap-1.5 pt-1" style={{ color: C.textMuted }}><ShieldCheck size={13} color={C.gold} /> Card capture uses Stripe — configure your Stripe keys in the backend .env.</div>
+          <GoldButton full disabled={placing} onClick={placeOrder}>{placing ? "Placing order..." : "Place Order"}</GoldButton>
+        </div>
+      </div>
+    </div>
+  );
+                                     }                                                                 }
