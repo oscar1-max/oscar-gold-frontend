@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Search, ShoppingCart, Heart, User, Star, ChevronRight, Plus, Minus, Check,
+  Search, ShoppingCart, Heart, User, Star, ChevronRight, Plus, Minus, check,
   Package, TrendingUp, Users, ShieldCheck, Truck, CreditCard, Smartphone,
   Building2, Store, Settings, AlertTriangle, Trash2, MessageCircle, ArrowRight,
   Sparkles, LogOut, Loader2,
@@ -156,3 +156,130 @@ function ProductCard({ product, setView, addToCart, wishlist, toggleWishlist }) 
   );
 
 }
+function Home({ setView, addToCart, wishlist, toggleWishlist, query, categories }) {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    api.products(query ? { q: query } : {})
+      .then(setProducts)
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [query]);
+
+  return (
+    <div>
+      <div style={{ background: C.black }}>
+        <div className="max-w-6xl mx-auto px-4 py-16 md:py-24 grid md:grid-cols-2 gap-10 items-center">
+          <div>
+            <div className="og-sans og-tracked text-xs mb-4" style={{ color: C.gold }}>ELEVATE YOUR EVERYDAY</div>
+            <h1 className="og-serif" style={{ fontSize: 48, lineHeight: 1.05, color: C.white, fontWeight: 700 }}>Curated goods,<br /><span style={{ color: C.gold }}>gilded</span> in quality.</h1>
+            <div className="mt-8"><GoldButton onClick={() => setView({ name: "category", id: "all" })} icon={ArrowRight}>Shop Now</GoldButton></div>
+          </div>
+          <div className="hidden md:flex justify-center">
+            <div className="rounded-full flex items-center justify-center" style={{ width: 260, height: 260, border: `1px solid ${C.gold}` }}>
+              <span className="og-serif" style={{ color: C.gold, fontSize: 80, fontWeight: 700 }}>OG</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 py-10 grid grid-cols-3 md:grid-cols-6 gap-3">
+        {categories.map((c) => (
+          <button key={c.id} onClick={() => setView({ name: "category", id: c.id })} className="flex flex-col items-center gap-2 py-5" style={{ border: `1px solid ${C.line}` }}>
+            <span className="og-sans text-xs font-medium" style={{ color: C.black }}>{c.name}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4">
+        <div className="flex items-center gap-3 px-5 py-3 mb-8" style={{ background: C.off, border: `1px solid ${C.line}` }}>
+          <Sparkles size={16} color={C.gold} />
+          <span className="og-sans text-xs" style={{ color: C.textMuted }}>Live data from your Oscar Gold Store API — every product below is coming straight from the database.</span>
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 pb-16">
+        <SectionTitle eyebrow="This Week" title={query ? `Results for "${query}"` : "Featured Products"} />
+        {loading && <Loading />}
+        {error && <ErrorBox message={`Couldn't load products: ${error}. Is the backend running?`} />}
+        {!loading && !error && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+            {products.map((p) => <ProductCard key={p.id} product={p} setView={setView} addToCart={addToCart} wishlist={wishlist} toggleWishlist={toggleWishlist} />)}
+            {products.length === 0 && <div className="col-span-4 og-sans text-sm text-center py-10" style={{ color: C.textMuted }}>No products found. Run `npm run seed` in the backend if the catalog is empty.</div>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CategoryPage({ id, setView, addToCart, wishlist, toggleWishlist, categories }) {
+  const [activeCat, setActiveCat] = useState(id);
+  const [priceMax, setPriceMax] = useState(500);
+  const [minRating, setMinRating] = useState(0);
+  const [sort, setSort] = useState("relevance");
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => setActiveCat(id), [id]);
+
+  useEffect(() => {
+    setLoading(true);
+    api.products({
+      category: activeCat === "all" ? undefined : activeCat,
+      maxPrice: priceMax,
+      minRating: minRating || undefined,
+      sort: sort === "relevance" ? undefined : sort,
+    }).then(setProducts).catch((e) => setError(e.message)).finally(() => setLoading(false));
+  }, [activeCat, priceMax, minRating, sort]);
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="flex items-center gap-1 og-sans text-xs mb-6" style={{ color: C.textMuted }}>
+        <button onClick={() => setView({ name: "home" })}>Home</button><ChevronRight size={12} />
+        <span style={{ color: C.black }}>{activeCat === "all" ? "All Products" : categories.find((c) => c.id === activeCat)?.name}</span>
+      </div>
+      <div className="grid md:grid-cols-4 gap-8">
+        <div className="md:col-span-1 space-y-6">
+          <div>
+            <div className="og-sans text-xs font-semibold mb-2" style={{ color: C.black }}>CATEGORY</div>
+            <div className="flex flex-wrap gap-2">
+              <Pill active={activeCat === "all"} onClick={() => setActiveCat("all")}>All</Pill>
+              {categories.map((c) => <Pill key={c.id} active={activeCat === c.id} onClick={() => setActiveCat(c.id)}>{c.name}</Pill>)}
+            </div>
+          </div>
+          <div>
+            <div className="og-sans text-xs font-semibold mb-2" style={{ color: C.black }}>MAX PRICE: ${priceMax}</div>
+            <input type="range" min={20} max={500} value={priceMax} onChange={(e) => setPriceMax(+e.target.value)} className="w-full" style={{ accentColor: C.gold }} />
+          </div>
+          <div>
+            <div className="og-sans text-xs font-semibold mb-2" style={{ color: C.black }}>MIN RATING</div>
+            <div className="flex gap-2">{[0, 4, 4.5].map((r) => <Pill key={r} active={minRating === r} onClick={() => setMinRating(r)}>{r === 0 ? "Any" : `${r}+`}</Pill>)}</div>
+          </div>
+        </div>
+        <div className="md:col-span-3">
+          <div className="flex items-center justify-between mb-5">
+            <span className="og-sans text-xs" style={{ color: C.textMuted }}>{products.length} results</span>
+            <select value={sort} onChange={(e) => setSort(e.target.value)} className="og-sans text-xs px-2 py-1.5" style={{ border: `1px solid ${C.line}` }}>
+              <option value="relevance">Sort: Newest</option>
+              <option value="price-asc">Price: Low to High</option>
+              <option value="price-desc">Price: High to Low</option>
+            </select>
+          </div>
+          {loading && <Loading />}
+          {error && <ErrorBox message={error} />}
+          {!loading && !error && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
+              {products.map((p) => <ProductCard key={p.id} product={p} setView={setView} addToCart={addToCart} wishlist={wishlist} toggleWishlist={toggleWishlist} />)}
+              {products.length === 0 && <div className="og-sans text-sm text-center py-16 col-span-3" style={{ color: C.textMuted }}>No products match these filters.</div>}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+                                                                  }
