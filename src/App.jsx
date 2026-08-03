@@ -547,3 +547,121 @@ function CheckoutPage({ setView, refreshCartCount }) {
     </div>
   );
                                      }                                                                 }
+function LoginPage({ setView, onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    setLoading(true); setError(null);
+    try {
+      const res = await api.login({ email, password });
+      onLogin(res);
+    } catch (e) { setError(e.message); }
+    setLoading(false);
+  };
+
+  const demoAccounts = [
+    ["Buyer", "amara@example.com", "BuyerPass123!"],
+    ["Seller", "seller@maisonrho.com", "SellerPass123!"],
+    ["Admin", "admin@oscargold.store", "AdminPass123!"],
+  ];
+
+  return (
+    <div className="max-w-sm mx-auto px-4 py-16">
+      <SectionTitle title="Log In" />
+      {error && <div className="mb-4"><ErrorBox message={error} /></div>}
+      <div className="space-y-3">
+        <input className="og-sans text-sm px-3 py-2.5 w-full" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ border: `1px solid ${C.line}` }} />
+        <input className="og-sans text-sm px-3 py-2.5 w-full" placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ border: `1px solid ${C.line}` }} />
+        <GoldButton full onClick={submit} disabled={loading}>{loading ? "Logging in..." : "Log In"}</GoldButton>
+      </div>
+      <div className="og-sans text-xs text-center mt-4" style={{ color: C.textMuted }}>
+        No account? <button onClick={() => setView({ name: "register" })} className="underline" style={{ color: C.gold }}>Sign up</button>
+      </div>
+      <div className="mt-8 pt-6" style={{ borderTop: `1px solid ${C.line}` }}>
+        <div className="og-sans text-xs font-semibold mb-2" style={{ color: C.black }}>SEEDED DEMO ACCOUNTS (after `npm run seed`)</div>
+        {demoAccounts.map(([label, e, p]) => (
+          <button key={e} onClick={() => { setEmail(e); setPassword(p); }} className="og-sans text-xs block mb-1 underline" style={{ color: C.textMuted }}>{label}: {e}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RegisterPage({ setView, onLogin }) {
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "buyer" });
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    setLoading(true); setError(null);
+    try {
+      const res = await api.register(form);
+      onLogin(res);
+    } catch (e) { setError(e.message); }
+    setLoading(false);
+  };
+
+  return (
+    <div className="max-w-sm mx-auto px-4 py-16">
+      <SectionTitle title="Create Account" />
+      {error && <div className="mb-4"><ErrorBox message={error} /></div>}
+      <div className="space-y-3">
+        <input className="og-sans text-sm px-3 py-2.5 w-full" placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={{ border: `1px solid ${C.line}` }} />
+        <input className="og-sans text-sm px-3 py-2.5 w-full" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={{ border: `1px solid ${C.line}` }} />
+        <input className="og-sans text-sm px-3 py-2.5 w-full" placeholder="Password (8+ characters)" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} style={{ border: `1px solid ${C.line}` }} />
+        <div className="flex gap-2">
+          <Pill active={form.role === "buyer"} onClick={() => setForm({ ...form, role: "buyer" })}>Shop as Buyer</Pill>
+          <Pill active={form.role === "seller"} onClick={() => setForm({ ...form, role: "seller" })}>Apply as Seller</Pill>
+        </div>
+        <GoldButton full onClick={submit} disabled={loading}>{loading ? "Creating..." : "Create Account"}</GoldButton>
+      </div>
+      <div className="og-sans text-xs text-center mt-4" style={{ color: C.textMuted }}>Already have an account? <button onClick={() => setView({ name: "login" })} className="underline" style={{ color: C.gold }}>Log in</button></div>
+    </div>
+  );
+}
+
+function AccountPage({ user }) {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { api.orders().then(setOrders).finally(() => setLoading(false)); }, []);
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-10">
+      <SectionTitle title="My Account" right={<span className="og-sans text-xs" style={{ color: C.textMuted }}>{user.name} · {user.email}</span>} />
+      <div className="og-sans text-xs font-semibold mb-3" style={{ color: C.black }}>ORDER HISTORY</div>
+      {loading ? <Loading /> : orders.length === 0 ? (
+        <div className="og-sans text-sm" style={{ color: C.textMuted }}>No orders yet.</div>
+      ) : (
+        <div className="space-y-3">
+          {orders.map((o) => (
+            <div key={o.id} className="flex items-center justify-between p-4" style={{ border: `1px solid ${C.line}` }}>
+              <div><div className="og-sans text-sm font-semibold" style={{ color: C.black }}>#{o.id.slice(0, 8)}</div><div className="og-sans text-xs" style={{ color: C.textMuted }}>{new Date(o.created_at).toLocaleDateString()}</div></div>
+              <span className="og-sans text-xs px-2.5 py-1 capitalize" style={{ border: `1px solid ${C.line}`, color: C.gold }}>{o.status}</span>
+              <span className="og-serif font-bold" style={{ color: C.black }}>{cents(o.total_cents)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WishlistPage({ setView, addToCart, toggleWishlist, wishlist }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { api.getWishlist().then(setItems).finally(() => setLoading(false)); }, [wishlist]);
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-10">
+      <SectionTitle title="Wishlist" />
+      {loading ? <Loading /> : items.length === 0 ? (
+        <div className="og-sans text-sm py-16 text-center" style={{ color: C.textMuted }}>No items saved yet.</div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+          {items.map((p) => <ProductCard key={p.id} product={p} setView={setView} addToCart={addToCart} wishlist={wishlist} toggleWishlist={toggleWishlist} />)}
+        </div>
+      )}
+    </div>
+  );
+        }
